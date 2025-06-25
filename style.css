@@ -1,0 +1,213 @@
+body {
+    background-color: rgb(27, 30, 33);
+    width: 100vw;
+    height: 100vh;
+    margin: 0;
+    display: flex;
+    color: white;
+    font-family: Ubuntu, sans-serif;
+    overflow: hidden;
+}
+
+#panel1 {
+    background-color: rgb(30, 34, 37);
+    width: 50%;
+    height: 100%;
+    position: relative;
+}
+
+#panel2 {
+    background-color: rgb(21, 25, 28);
+    width: 50%;
+    height: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+}
+
+button {
+    color: white;
+    background-color: rgb(18, 18, 19);
+    border: none;
+    padding: 4px 10px 4px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease-in-out;
+    font-family: Ubuntu, sans-serif;
+}
+
+button:hover {
+    background-color: rgb(25, 25, 25);
+}
+
+.tabs {
+    height: 29px;
+    width: fit-content;
+    position: relative;
+    padding: 0px 20px 0px 20px;
+    border-bottom-left-radius: 4px;
+    border-bottom-right-radius: 4px;
+    left: 50%;
+    transform: translateX(-50%);
+    backdrop-filter: blur(6px);
+    z-index: 999999;
+    background-color: rgba(0, 0, 0, 0.2);
+}
+
+.tabs button {
+    border-bottom-left-radius: 0px;
+    border-bottom-right-radius: 0px;
+    position: relative;
+    top: 6px;
+}
+
+.tabs button:hover {
+    transform: translateY(-2px);
+    padding-bottom: 6px;
+}
+
+.openTab {
+    transform: translateY(-2px) !important;
+    padding-bottom: 6px !important;
+    background-color: rgb(40, 44, 47) !important;
+}
+
+.mono {
+    font-family: "Ubuntu Mono", monospace;
+}
+
+#codeEditor {
+    height: 65%;
+    width: calc(100% - 20px);
+    padding: 10px;
+    background-color: rgb(26, 25, 28);
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-family: "Ubuntu Mono", monospace;
+    resize: none;
+    outline: none;
+}
+
+#input {
+    height: calc(25% - 20px);
+    width: calc(100% - 20px);
+    padding: 10px;
+    background-color: rgb(26, 25, 28);
+    border: none;
+    border-radius: 4px;
+    color: white;
+    font-family: "Ubuntu Mono", monospace;
+    resize: none;
+    outline: none;
+    margin-top: 10px;
+}
+
+#run {
+    background-color: rgb(72, 139, 72);
+    width: 35px;
+    height: 35px;
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 0px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+#run:hover {
+    background-color: rgb(100, 200, 100);
+}
+
+#displayWidth, #displayHeight, #memorySize {
+    width: 80px;
+    background-color: rgb(26, 25, 28);
+    border: none;
+    border-radius: 4px;
+    color: white;
+    padding: 4px;
+    font-family: Ubuntu, sans-serif;
+}
+
+input {
+    background-color: rgb(26, 25, 28);
+    border: none;
+    border-radius: 4px;
+    color: white;
+    padding: 4px;
+    font-family: Ubuntu, sans-serif;
+}
+
+#output {
+    background-color: rgb(26, 25, 28);
+    border-radius: 4px;
+    padding: 10px;
+    height: calc(100% - 80px);
+    overflow-y: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+#display {
+    background-color: rgb(26, 25, 28);
+    border-radius: 4px;
+    padding: 10px;
+    height: calc(100% - 80px);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+
+#displayGrid {
+    display: grid;
+    gap: 0;
+    border: 1px solid rgb(60, 60, 60);
+}
+
+.pixel {
+    aspect-ratio: 1;
+}
+
+#memoryView {
+    background-color: rgb(26, 25, 28);
+    border-radius: 4px;
+    padding: 10px;
+    height: calc(100% - 80px);
+    overflow-y: auto;
+    font-family: "Ubuntu Mono", monospace;
+    font-size: 12px;
+}
+
+.memory-cell {
+    display: inline-block;
+    width: 30px;
+    text-align: center;
+    margin: 2px;
+    padding: 2px;
+    border-radius: 2px;
+    background-color: rgb(40, 44, 47);
+}
+
+.memory-cell.current {
+    background-color: rgb(72, 139, 72);
+}
+
+.settings-content {
+    padding: 20px;
+}
+
+.settings-content h2 {
+    margin-bottom: 15px;
+}
+
+.settings-content p {
+    margin: 10px 0;
+}
+
+.settings-content label {
+    display: inline-block;
+    width: 120px;
+}
