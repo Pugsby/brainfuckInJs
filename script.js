@@ -409,7 +409,7 @@ function runBrainfuck() {
 // Execute Brainfuck code
 function executeCode(code, input) {
     var loopStack = [];  // Stack for handling loops (like Lua tables used as stacks)
-    var maxInstructions = 1000000;  // Prevent infinite loops
+    var maxInstructions = 10000000000000000000000000000000000000000000000000000;  // uhhh fuck you
     var instructionCount = 0;
     
     while (codePointer < code.length && instructionCount < maxInstructions) {
