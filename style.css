@@ -211,3 +211,14 @@ input {
     display: inline-block;
     width: 120px;
 }
+
+*::-webkit-scrollbar {
+    width: 8px;
+}
+*::-webkit-scrollbar-track {
+    background: rgb(30, 34, 37);
+}
+*::-webkit-scrollbar-thumb {
+    background: rgb(255, 255, 255);
+    border-radius: 4px;
+}
