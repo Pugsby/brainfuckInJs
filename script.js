@@ -56,6 +56,13 @@ var inputPointer = 0;
 var output = "";
 var isRunning = false;
 var colorMode = "grayscale";  // "grayscale", "rgb", or "rgba"
+var millisecondsPerTick = 0;  // New variable for execution delay
+var executionTimeout = null;  // For managing async execution
+
+// New variables for display update control
+var displayUpdateMode = "immediate";  // "immediate" or "periodic"
+var displayUpdateInterval = null;     // Timer for periodic updates
+var needsDisplayUpdate = false;       // Flag to track if display needs updating
 
 // Initialize Settings tab
 panelContents[0].innerHTML = `
@@ -69,10 +76,6 @@ panelContents[0].innerHTML = `
             <input type='number' id='displayHeight' min='1' max='50' value='16'>
         </p>
         <p>
-            <label>Memory Size:</label>
-            <input type='number' id='memorySize' min='256' max='100000' value='30000'>
-        </p>
-        <p>
             <label>Color Mode:</label>
             <select id='colorMode' onchange="changeColorMode()">
                 <option value="grayscale">Grayscale (1 byte/pixel)</option>
@@ -80,14 +83,33 @@ panelContents[0].innerHTML = `
                 <option value="rgba">RGBA (4 bytes/pixel)</option>
             </select>
         </p>
+        <p>
+            <label>Display Update Mode:</label>
+            <select id='displayUpdateMode' onchange="changeDisplayUpdateMode()">
+                <option value="immediate">Update Immediately</option>
+                <option value="periodic">Update Every 0.1 Seconds</option>
+            </select>
+            <small>(Periodic updates can improve performance for complex programs)</small>
+        </p>
         <p>Minimum Memory for Display: <b id='minMemory'>256</b></p>
+        
+        <h2>Interpreter Settings</h2>
+        <p>
+            <label>Memory Size:</label>
+            <input type='number' id='memorySize' min='256' max='100000' value='30000'>
+        </p>
+        <p>
+            <label>Milliseconds per Tick:</label>
+            <input type='number' id='millisecondsPerTick' min='0' max='10000' value='0' step='0.01'>
+            <small>(0 = full speed, 0.01-0.99 = multiple instructions per ms, 1+ = slower execution)</small>
+        </p>
         <button onclick="updateSettings()">Apply Settings</button>
-        <br><br>
         <button onclick="downloadCode()">Download Code</button>
         <button onclick="uploadCode()">Upload Code</button>
+        <button onclick="downloadMem()">Download Memory</button>
+        <button onclick="stopExecution()" id="stopButton" style="display:none; background-color: #ff4444; color: white;">Stop Execution</button>
     </div>
 `;
-
 
 function saveFile(name, type, data) {
     // Check for legacy IE support
@@ -169,6 +191,7 @@ function downloadImage() {
         document.body.removeChild(a);
     });
 }
+
 function uploadCode() {
     var upload = document.createElement("input");
     upload.type = "file";
@@ -187,6 +210,12 @@ function uploadCode() {
         document.body.removeChild(upload);
     }
 }
+
+function downloadMem() {
+    var mem = document.getElementById("memoryView").innerText;
+    saveFile("memory.txt", "text/plain", mem);
+}
+
 // Initialize Output tab
 panelContents[1].innerHTML = '<div id="output" class="mono"></div>';
 
@@ -201,6 +230,29 @@ function changeColorMode() {
     colorMode = document.getElementById("colorMode").value;
     updateMinMemoryDisplay();
     updateSettings();
+}
+
+// Change display update mode function
+function changeDisplayUpdateMode() {
+    displayUpdateMode = document.getElementById("displayUpdateMode").value;
+    
+    // Clear existing periodic update timer if it exists
+    if (displayUpdateInterval) {
+        clearInterval(displayUpdateInterval);
+        displayUpdateInterval = null;
+    }
+    
+    if (displayUpdateMode === "periodic") {
+        // Set up periodic updates every 1 second (1000 milliseconds)
+        // Similar to Lua's timer functions, setInterval runs code repeatedly
+        displayUpdateInterval = setInterval(function() {
+            if (needsDisplayUpdate) {
+                updateDisplay();
+                updateMemoryView();
+                needsDisplayUpdate = false;
+            }
+        }, 100);
+    }
 }
 
 // Update minimum memory display
@@ -225,6 +277,13 @@ function updateSettings() {
     displayWidth = parseInt(document.getElementById("displayWidth").value) || 16;
     displayHeight = parseInt(document.getElementById("displayHeight").value) || 16;
     memorySize = parseInt(document.getElementById("memorySize").value) || 30000;
+    millisecondsPerTick = parseFloat(document.getElementById("millisecondsPerTick").value) || 0;
+    
+    // Update display mode if the element exists
+    if (document.getElementById("displayUpdateMode")) {
+        displayUpdateMode = document.getElementById("displayUpdateMode").value;
+        changeDisplayUpdateMode(); // Apply the display update mode
+    }
     
     var baseMemory = displayWidth * displayHeight;
     var minMemory;
@@ -259,6 +318,18 @@ function initMemory() {
     memoryPointer = 0;
 }
 
+// Helper function to request display update
+// This is like setting a flag in Lua - we mark that an update is needed
+function requestDisplayUpdate() {
+    if (displayUpdateMode === "immediate") {
+        updateDisplay();
+        updateMemoryView();
+    } else {
+        // Just set the flag - the periodic timer will handle the actual update
+        needsDisplayUpdate = true;
+    }
+}
+
 // Update display visualization
 function updateDisplay() {
     var displayDiv = document.getElementById("display");
@@ -286,7 +357,7 @@ function updateDisplay() {
         for (var x = 0; x < displayWidth; x++) {
             var pixel = document.createElement("div");
             pixel.className = "pixel";
-            
+            pixel.title = "(" + x + ", " + y + "), " + (y * displayWidth + x);
             if (colorMode === "rgba") {
                 // RGBA mode: use 4 bytes per pixel (R, G, B, A)
                 var baseIndex = (y * displayWidth + x) * 4;
@@ -374,6 +445,35 @@ function updateMemoryView() {
     }
 }
 
+// Stop execution function
+function stopExecution() {
+    if (executionTimeout) {
+        clearTimeout(executionTimeout);
+        executionTimeout = null;
+    }
+    
+    // Clear the periodic display update timer
+    if (displayUpdateInterval) {
+        clearInterval(displayUpdateInterval);
+        displayUpdateInterval = null;
+    }
+    
+    isRunning = false;
+    var outputDiv = document.getElementById("output");
+    outputDiv.textContent = output + "\n\n--- Execution stopped ---";
+    document.getElementById("stopButton").style.display = "none";
+    document.getElementById("run").disabled = false;
+    
+    // Final display update when stopping
+    updateDisplay();
+    updateMemoryView();
+    
+    // Restart periodic updates if that mode is selected
+    if (displayUpdateMode === "periodic") {
+        changeDisplayUpdateMode();
+    }
+}
+
 // Main Brainfuck interpreter function
 function runBrainfuck() {
     if (isRunning) return;
@@ -388,28 +488,185 @@ function runBrainfuck() {
     inputPointer = 0;
     output = "";
     isRunning = true;
+    needsDisplayUpdate = false;
     
     var outputDiv = document.getElementById("output");
     outputDiv.textContent = "Running...\n";
     
-    // Use setTimeout to prevent browser freezing
-    setTimeout(function() {
-        try {
-            executeCode(code, input);
-            outputDiv.textContent = output || "(no output)";
-            updateDisplay();
-            updateMemoryView();
-        } catch (error) {
-            outputDiv.textContent = "Error: " + error.message;
-        }
-        isRunning = false;
-    }, 10);
+    // Show stop button and disable run button
+    document.getElementById("stopButton").style.display = "inline-block";
+    document.getElementById("run").disabled = true;
+    
+    // Set up periodic updates if needed
+    if (displayUpdateMode === "periodic") {
+        changeDisplayUpdateMode();
+    }
+    
+    // Choose execution method based on milliseconds per tick
+    if (millisecondsPerTick > 0) {
+        // Slow execution with delays
+        executeCodeWithDelay(code, input);
+    } else {
+        // Fast execution (original behavior)
+        setTimeout(function() {
+            try {
+                executeCode(code, input);
+                outputDiv.textContent = output || "(no output)";
+                // Always update display immediately when execution finishes
+                updateDisplay();
+                updateMemoryView();
+            } catch (error) {
+                outputDiv.textContent = "Error: " + error.message;
+            }
+            isRunning = false;
+            document.getElementById("stopButton").style.display = "none";
+            document.getElementById("run").disabled = false;
+        }, 10);
+    }
 }
 
-// Execute Brainfuck code
+// Execute code with delay between instructions
+function executeCodeWithDelay(code, input) {
+    var loopStack = [];
+    var maxInstructions = 1000000;  // Lower limit for delayed execution
+    var instructionCount = 0;
+    
+    // Calculate instructions per frame and delay
+    var instructionsPerFrame = 1;
+    var frameDelay = millisecondsPerTick;
+    
+    if (millisecondsPerTick > 0 && millisecondsPerTick < 1) {
+        // For values between 0 and 1, run multiple instructions per millisecond
+        instructionsPerFrame = Math.ceil(1 / millisecondsPerTick);
+        frameDelay = 1; // Execute every millisecond
+    } else if (millisecondsPerTick >= 1) {
+        // For values >= 1, run one instruction per specified milliseconds
+        instructionsPerFrame = 1;
+        frameDelay = millisecondsPerTick;
+    }
+    
+    function executeInstructionBatch() {
+        if (!isRunning || codePointer >= code.length || instructionCount >= maxInstructions) {
+            // Execution finished
+            var outputDiv = document.getElementById("output");
+            if (instructionCount >= maxInstructions) {
+                outputDiv.textContent = output + "\n\nError: Maximum instruction limit reached";
+            } else {
+                outputDiv.textContent = output || "(no output)";
+            }
+            // Always update display immediately when execution finishes
+            updateDisplay();
+            updateMemoryView();
+            isRunning = false;
+            document.getElementById("stopButton").style.display = "none";
+            document.getElementById("run").disabled = false;
+            return;
+        }
+        
+        // Execute multiple instructions in this frame
+        for (var i = 0; i < instructionsPerFrame && isRunning && codePointer < code.length && instructionCount < maxInstructions; i++) {
+            var command = code[codePointer];
+            
+            try {
+                switch (command) {
+                    case '>':  // Move pointer right
+                        memoryPointer++;
+                        if (memoryPointer >= memorySize) {
+                            memoryPointer = 0;
+                        }
+                        break;
+                        
+                    case '<':  // Move pointer left
+                        memoryPointer--;
+                        if (memoryPointer < 0) {
+                            memoryPointer = memorySize - 1;
+                        }
+                        break;
+                        
+                    case '+':  // Increment memory cell
+                        memory[memoryPointer] = (memory[memoryPointer] + 1) % 256;
+                        // Request display update since memory changed
+                        requestDisplayUpdate();
+                        break;
+                        
+                    case '-':  // Decrement memory cell
+                        memory[memoryPointer]--;
+                        if (memory[memoryPointer] < 0) {
+                            memory[memoryPointer] = 255;
+                        }
+                        // Request display update since memory changed
+                        requestDisplayUpdate();
+                        break;
+                        
+                    case '.':  // Output character
+                        output += String.fromCharCode(memory[memoryPointer]);
+                        break;
+                        
+                    case ',':  // Input character
+                        if (inputPointer < input.length) {
+                            memory[memoryPointer] = input.charCodeAt(inputPointer);
+                            inputPointer++;
+                        } else {
+                            memory[memoryPointer] = 0;
+                        }
+                        // Request display update since memory changed
+                        requestDisplayUpdate();
+                        break;
+                        
+                    case '[':  // Loop start
+                        if (memory[memoryPointer] === 0) {
+                            // Skip to matching ]
+                            var bracketCount = 1;
+                            while (bracketCount > 0 && codePointer < code.length - 1) {
+                                codePointer++;
+                                if (code[codePointer] === '[') bracketCount++;
+                                else if (code[codePointer] === ']') bracketCount--;
+                            }
+                        } else {
+                            loopStack.push(codePointer);
+                        }
+                        break;
+                        
+                    case ']':  // Loop end
+                        if (memory[memoryPointer] !== 0) {
+                            if (loopStack.length > 0) {
+                                codePointer = loopStack[loopStack.length - 1];
+                            }
+                        } else {
+                            if (loopStack.length > 0) {
+                                loopStack.pop();
+                            }
+                        }
+                        break;
+                }
+                
+                codePointer++;
+                instructionCount++;
+                
+            } catch (error) {
+                document.getElementById("output").textContent = "Error: " + error.message;
+                isRunning = false;
+                document.getElementById("stopButton").style.display = "none";
+                document.getElementById("run").disabled = false;
+                return;
+            }
+        }
+        
+        // Update output every frame (this is always immediate)
+        document.getElementById("output").textContent = output || "(no output)";
+        
+        // Schedule next batch of instructions
+        executionTimeout = setTimeout(executeInstructionBatch, frameDelay);
+    }
+    
+    // Start execution
+    executeInstructionBatch();
+}
+
+// Execute Brainfuck code (original fast version)
 function executeCode(code, input) {
-    var loopStack = [];  // Stack for handling loops (like Lua tables used as stacks)
-    var maxInstructions = 10000000000000000000000000000000000000000000000000000;  // uhhh fuck you
+    var loopStack = [];
+    var maxInstructions = 1000000000000000;
     var instructionCount = 0;
     
     while (codePointer < code.length && instructionCount < maxInstructions) {
@@ -419,14 +676,14 @@ function executeCode(code, input) {
             case '>':  // Move pointer right
                 memoryPointer++;
                 if (memoryPointer >= memorySize) {
-                    throw new Error("Memory pointer out of bounds");
+                    memoryPointer = 0;
                 }
                 break;
                 
             case '<':  // Move pointer left
                 memoryPointer--;
                 if (memoryPointer < 0) {
-                    throw new Error("Memory pointer out of bounds");
+                    memoryPointer = memorySize - 1;
                 }
                 break;
                 
@@ -437,7 +694,7 @@ function executeCode(code, input) {
             case '-':  // Decrement memory cell
                 memory[memoryPointer]--;
                 if (memory[memoryPointer] < 0) {
-                    memory[memoryPointer] = 255;  // Wrap to 255
+                    memory[memoryPointer] = 255;
                 }
                 break;
                 
@@ -450,7 +707,7 @@ function executeCode(code, input) {
                     memory[memoryPointer] = input.charCodeAt(inputPointer);
                     inputPointer++;
                 } else {
-                    memory[memoryPointer] = 0;  // EOF
+                    memory[memoryPointer] = 0;
                 }
                 break;
                 
@@ -464,18 +721,18 @@ function executeCode(code, input) {
                         else if (code[codePointer] === ']') bracketCount--;
                     }
                 } else {
-                    loopStack.push(codePointer);  // Save loop start position
+                    loopStack.push(codePointer);
                 }
                 break;
                 
             case ']':  // Loop end
                 if (memory[memoryPointer] !== 0) {
                     if (loopStack.length > 0) {
-                        codePointer = loopStack[loopStack.length - 1];  // Jump back to loop start
+                        codePointer = loopStack[loopStack.length - 1];
                     }
                 } else {
                     if (loopStack.length > 0) {
-                        loopStack.pop();  // Remove loop start from stack
+                        loopStack.pop();
                     }
                 }
                 break;
@@ -495,4 +752,28 @@ document.getElementById("run").onclick = runBrainfuck;
 
 // Initialize everything
 updateSettings();
-openTab(1, document.getElementsByClassName("tabs")[0].getElementsByTagName("button")[1]);  // Start with Output tab
+openTab(1, document.getElementsByClassName("tabs")[0].getElementsByTagName("button")[1]);
+
+function updateMemorySizeDisplay() {
+    if (memorySize > 1000) {
+        document.getElementById("memorySizeDisplay").innerText = Math.round(memorySize / 100)/10 + " KB";
+        document.getElementById("memorySizeDisplay").style.backgroundColor = "rgb(100, 255, 146)";
+        if (memorySize > 1000000) {
+            document.getElementById("memorySizeDisplay").innerText = Math.round(memorySize / 100000)/10 + " MB";
+            document.getElementById("memorySizeDisplay").style.backgroundColor = "rgb(206, 255, 100)";
+            if (memorySize > 1000000000) {
+                document.getElementById("memorySizeDisplay").innerText = Math.round(memorySize / 100000000)/10 + " GB";
+                document.getElementById("memorySizeDisplay").style.backgroundColor = "rgb(255, 100, 100)";
+            }
+        }
+    } else {
+        document.getElementById("memorySizeDisplay").innerText = memorySize + " B"; 
+        document.getElementById("memorySizeDisplay").style.backgroundColor = "rgb(105, 100, 255)";
+    }
+    if (displayUpdateMode === "immediate") {
+        updateDisplay();
+        updateMemoryView();
+    }
+    setTimeout(updateMemorySizeDisplay, 1);
+}
+updateMemorySizeDisplay();
